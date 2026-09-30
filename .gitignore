@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+poker_tracker.db
+build/
+dist/
+*.spec
+LaunchPokerTracker.bat
+BUILD_CHECK.txt
+PokerTrackerICO/
