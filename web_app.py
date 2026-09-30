@@ -446,6 +446,12 @@ HTML = """
 
             </form>
 
+            <form method="POST" action="/new-session" style="margin-top: 10px;">
+                <button type="submit">
+                     NEW SESSION
+                </button>
+            </form>
+
         </div>
 
     {% endif %}
@@ -569,6 +575,16 @@ def new_hand():
             error_message = ""
         except PokerRuleError as exc:
             error_message = str(exc)
+
+    return redirect(url_for("home"))
+
+@app.route("/new-session", methods=["POST"])
+def new_session():
+    global game, history, error_message
+
+    game = None
+    history = GameHistory()
+    error_message = ""
 
     return redirect(url_for("home"))
 
