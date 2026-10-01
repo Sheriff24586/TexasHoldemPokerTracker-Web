@@ -6,6 +6,7 @@ from poker_tracker.engine import PokerGame, Action, PokerRuleError, GameHistory
 app = Flask(__name__)
 
 game = None
+winner_seats = set()
 history = GameHistory()
 error_message = ""
 
@@ -29,6 +30,409 @@ HTML = """
         .control-row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.control-row form,.control-row button{width:100%}.secondary{border-color:var(--line);background:#202c26;box-shadow:none}.history{display:grid;gap:0}.history-row{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:10px 1px;border-bottom:1px solid rgba(255,255,255,.07)}.history-row:last-child{border-bottom:0}.history-seq{color:var(--gold);font-size:10px;font-weight:800}.history-main{font-size:12px;font-weight:700}.history-sub{display:block;margin-top:2px;color:var(--muted);font-size:10px;font-weight:500}.history-amount{color:#e9d6ac;font-size:12px;font-variant-numeric:tabular-nums}.error{margin-bottom:13px;padding:12px 14px;border:1px solid rgba(255,100,100,.35);border-radius:13px;background:#642e2d;color:#fff}.settlement-pot{margin:10px 0;padding:13px;border:1px solid var(--line);border-radius:15px;background:#0d1813}.winner-option{display:flex!important;align-items:center;gap:9px;margin:7px 0!important;color:var(--ink);font-size:13px}.new-session{margin-top:9px}.muted{color:var(--muted)}
         @media(max-width:390px){body{padding:15px 10px 30px}.card{padding:14px;border-radius:17px}.table-felt{padding:17px 11px 13px}.status{gap:5px}.status-box{padding:7px 3px}.status-box span{font-size:14px}.status-box.pot span{font-size:17px}.app-title{font-size:19px}.app-logo{width:43px;height:43px}.raise-form{grid-template-columns:minmax(0,1fr) 106px}}
         @media(min-width:700px){body{padding-top:34px}.container{width:min(100%,560px)}}
+   
+    .player-seat.winner {
+        border-color: var(--gold);
+        box-shadow:
+            0 0 0 1px rgba(246, 194, 74, 0.45),
+            0 0 18px rgba(246, 194, 74, 0.45);
+        animation: winnerGlow 1.8s ease-in-out infinite;
+    }
+
+    @keyframes winnerGlow {
+        0%, 100% {
+            transform: translateY(0);
+            box-shadow:
+                0 0 0 1px rgba(246, 194, 74, 0.35),
+                0 0 12px rgba(246, 194, 74, 0.30);
+        }
+
+        50% {
+            transform: translateY(-2px);
+            box-shadow:
+                0 0 0 2px rgba(246, 194, 74, 0.65),
+                0 0 26px rgba(246, 194, 74, 0.60);
+        }
+    }
+        
+   /* ===== PREMIUM BUTTON ANIMATIONS ===== */
+
+button {
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        filter 0.18s ease,
+        background 0.18s ease;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+button:active {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+button:focus-visible {
+    outline: 2px solid rgba(246, 194, 74, 0.8);
+    outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    button {
+        transition: none;
+    }
+
+    button:hover,
+    button:active {
+        transform: none;
+    }
+}
+    /* ===== ACTIVE PLAYER LIVE SPARKLE ===== */
+
+        .player-seat.active-turn {
+            position: relative;
+            overflow: hidden;
+            border-color: rgba(246, 194, 74, 0.9);
+            box-shadow:
+                0 0 0 1px rgba(246, 194, 74, 0.25),
+                0 0 18px rgba(246, 194, 74, 0.18);
+            animation: activePlayerGlow 2s ease-in-out infinite;
+        }
+
+        .player-seat.active-turn::before {
+            content: "";
+            position: absolute;
+            top: -30%;
+            bottom: -30%;
+            left: -70%;
+            width: 45%;
+            pointer-events: none;
+            background: linear-gradient(
+                100deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.02) 25%,
+                rgba(255, 255, 255, 0.18) 45%,
+                rgba(246, 194, 74, 0.42) 50%,
+                rgba(255, 255, 255, 0.16) 55%,
+                rgba(255, 255, 255, 0.02) 75%,
+                transparent 100%
+            );
+            filter: blur(6px);
+            transform: skewX(-18deg);
+            animation: activePlayerShimmer 2.8s ease-in-out infinite;
+        }
+
+        .player-seat.active-turn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            box-shadow:
+                inset 0 0 18px rgba(246, 194, 74, 0.18),
+                inset 0 0 35px rgba(16, 185, 129, 0.12);
+            animation: activePlayerPulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes activePlayerGlow {
+            0%, 100% {
+                box-shadow:
+                    0 0 0 1px rgba(246, 194, 74, 0.22),
+                    0 0 12px rgba(246, 194, 74, 0.12);
+            }
+
+            50% {
+                box-shadow:
+                    0 0 0 1px rgba(246, 194, 74, 0.75),
+                    0 0 28px rgba(246, 194, 74, 0.32);
+            }
+        }
+
+        @keyframes activePlayerPulse {
+            0%, 100% {
+                opacity: 0.35;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes activePlayerShimmer {
+            0% {
+                left: -70%;
+                opacity: 0;
+            }
+
+            15% {
+                opacity: 0.15;
+            }
+
+            45% {
+                opacity: 0.9;
+            }
+
+            65% {
+                opacity: 0.35;
+            }
+
+            100% {
+                left: 125%;
+                opacity: 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .player-seat.active-turn,
+            .player-seat.active-turn::before,
+            .player-seat.active-turn::after {
+                animation: none;
+            }
+        }
+    
+    /* ===== PREMIUM STATUS TILES ===== */
+
+    .status-box {
+        position: relative;
+        overflow: hidden;
+        transition:
+            transform 0.25s ease,
+            border-color 0.25s ease,
+            box-shadow 0.25s ease;
+    }
+
+    .status-box:hover {
+        transform: translateY(-2px);
+        border-color: rgba(246, 194, 74, 0.55);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+    }
+
+    .status-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        margin: 0 auto 5px;
+        color: var(--gold);
+        font-size: 18px;
+        line-height: 1;
+        text-shadow: 0 0 10px rgba(246, 194, 74, 0.35);
+    }
+
+    .status-icon svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+    }
+
+    .status-box strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .status-box > span:last-child {
+        display: block;
+        font-size: 17px;
+        font-weight: 800;
+    }
+
+    /* Gentle breathing animation for the status icons */
+
+    .status-hand .status-icon,
+    .status-street .status-icon,
+    .status-pot .status-icon,
+    .status-bet .status-icon {
+        animation: statusIconBreath 2.4s ease-in-out infinite;
+    }
+
+    .status-street .status-icon {
+        animation-delay: 0.3s;
+    }
+
+    .status-pot .status-icon {
+        position: relative;
+        animation: potShimmer 3.2s ease-in-out infinite;
+        filter:
+            drop-shadow(0 0 3px rgba(246, 194, 74, 0.35))
+            drop-shadow(0 0 8px rgba(246, 194, 74, 0.18));
+    }
+
+    .status-pot .status-icon svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .status-hand .status-icon svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+        margin: 0 auto;
+    }
+
+    .status-bet .status-icon {
+        animation: moneyShimmer 2.6s ease-in-out infinite;
+        filter:
+            drop-shadow(0 0 3px rgba(246, 194, 74, 0.28))
+            drop-shadow(0 0 8px rgba(246, 194, 74, 0.12));
+    }
+
+    @keyframes statusIconBreath {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 0.72;
+        }
+
+        50% {
+            transform: scale(1.12);
+            opacity: 1;
+            text-shadow: 0 0 16px rgba(246, 194, 74, 0.65);
+        }
+    }
+    
+    @keyframes potShimmer {
+        0%, 100% {
+            opacity: 0.78;
+            filter:
+                drop-shadow(0 0 3px rgba(246, 194, 74, 0.22))
+                drop-shadow(0 0 7px rgba(246, 194, 74, 0.10));
+        }
+
+        20% {
+            opacity: 0.88;
+            filter:
+                drop-shadow(0 0 4px rgba(246, 194, 74, 0.32))
+                drop-shadow(0 0 9px rgba(246, 194, 74, 0.16));
+        }
+
+        35% {
+            opacity: 1;
+            filter:
+                drop-shadow(0 0 5px rgba(255, 255, 255, 0.55))
+                drop-shadow(0 0 12px rgba(246, 194, 74, 0.42));
+        }
+
+        50% {
+            opacity: 0.9;
+            filter:
+                drop-shadow(0 0 4px rgba(246, 194, 74, 0.35))
+                drop-shadow(0 0 9px rgba(246, 194, 74, 0.18));
+        }
+
+        70%, 100% {
+            opacity: 0.78;
+            filter:
+                drop-shadow(0 0 3px rgba(246, 194, 74, 0.22))
+                drop-shadow(0 0 7px rgba(246, 194, 74, 0.10));
+        }
+    }
+
+    @keyframes moneyShimmer {
+        0%, 100% {
+            transform: translateY(0) scale(1);
+            opacity: 0.78;
+            filter:
+                drop-shadow(0 0 3px rgba(246, 194, 74, 0.25))
+                drop-shadow(0 0 7px rgba(246, 194, 74, 0.10));
+        }
+
+        50% {
+            transform: translateY(-2px) scale(1.08);
+            opacity: 1;
+            filter:
+                drop-shadow(0 0 5px rgba(246, 194, 74, 0.55))
+                drop-shadow(0 0 12px rgba(246, 194, 74, 0.28));
+        }
+    }
+
+    /* ===== PREMIUM STREET CARDS ===== */
+
+    .street-cards {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 3px;
+        min-height: 34px;
+        margin-bottom: 6px;
+    }
+
+    .street-card {
+        position: relative;
+        width: 20px;
+        height: 29px;
+        border: 1px solid rgba(246, 194, 74, 0.75);
+        border-radius: 4px;
+        background:
+            linear-gradient(135deg,
+                rgba(246, 194, 74, 0.16),
+                rgba(255, 255, 255, 0.035));
+        box-shadow:
+            0 2px 8px rgba(0, 0, 0, 0.25),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+        animation: streetCardReveal 0.55s ease-out both;
+    }
+
+    .street-card::before {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border: 1px solid rgba(246, 194, 74, 0.28);
+        border-radius: 2px;
+        background:
+            repeating-linear-gradient(
+                45deg,
+                rgba(246, 194, 74, 0.07) 0,
+                rgba(246, 194, 74, 0.07) 2px,
+                transparent 2px,
+                transparent 4px
+            );
+    }
+
+    .street-card:nth-child(1) {
+        animation-delay: 0.05s;
+    }
+
+    .street-card:nth-child(2) {
+        animation-delay: 0.10s;
+    }
+
+    .street-card:nth-child(3) {
+        animation-delay: 0.15s;
+    }
+
+    .street-card:nth-child(4) {
+        animation-delay: 0.20s;
+    }
+
+    .street-card:nth-child(5) {
+        animation-delay: 0.25s;
+    }
+
+    @keyframes streetCardReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(8px) scale(0.82);
+        }
+
+        70% {
+            opacity: 1;
+            transform: translateY(-1px) scale(1.03);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+    
     </style>
 </head>
 
@@ -92,20 +496,118 @@ HTML = """
             <div class="eyebrow">Hand {{ game.hand_number }} &nbsp;·&nbsp; {{ game.street.value }}</div>
             <div class="status">
 
-                <div class="status-box">
-                    <strong>Hand</strong><span>{{ game.hand_number }}</span>
+                <div class="status-box status-hand">
+                    <span class="status-icon hand-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64" role="img">
+                            <rect x="17" y="10" width="30" height="44" rx="3"
+                                fill="none" stroke="currentColor" stroke-width="3"/>
+                            <rect x="11" y="16" width="30" height="44" rx="3"
+                                fill="none" stroke="currentColor" stroke-width="3"/>
+                            <path d="M26 27
+                                    c-3-4-8-1-6 4
+                                    l5 10
+                                    c1 3 4 5 7 5
+                                    h7
+                                    c5 0 8-3 8-8
+                                    v-7
+                                    c0-3-4-4-5-1
+                                    l-1 3
+                                    v-9
+                                    c0-3-4-4-5-1
+                                    l-1 6
+                                    v-7
+                                    c0-3-4-4-5-1
+                                    l-1 6
+                                    v-3
+                                    c0-3-4-4-4-1z"
+                                fill="currentColor"/>
+                        </svg>
+                    </span>
+                    <strong>Hand</strong>
+                    <span>{{ game.hand_number }}</span>
                 </div>
 
-                <div class="status-box">
-                    <strong>Street</strong><span>{{ game.street.value }}</span>
+                <div class="status-box status-street">
+                    <div class="street-cards" aria-hidden="true">
+                        {% if game.street.value == "Flop" %}
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                        {% elif game.street.value == "Turn" %}
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                        {% elif game.street.value == "River" %}
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                            <span class="street-card"></span>
+                        {% endif %}
+                    </div>
+
+                    <strong>Street</strong>
+                    <span>{{ game.street.value }}</span>
                 </div>
 
-                <div class="status-box">
-                    <strong>Pot</strong><span>{{ game.pot }}</span>
+                <div class="status-box status-pot">
+                    <span class="status-icon pot-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64" role="img" aria-hidden="true">
+                            <ellipse cx="32" cy="20" rx="20" ry="7"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="3"/>
+                            <path d="M12 20v25c0 7 9 12 20 12s20-5 20-12V20"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"/>
+                            <path d="M15 27c4 3 10 4 17 4s13-1 17-4"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"/>
+                            <circle cx="23" cy="18" r="4" fill="currentColor"/>
+                            <circle cx="32" cy="16" r="4" fill="currentColor"/>
+                            <circle cx="41" cy="19" r="4" fill="currentColor"/>
+                            <path d="M19 38h26"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <strong>Pot</strong>
+                    <span>{{ game.pot }}</span>
                 </div>
 
-                <div class="status-box">
-                    <strong>Bet</strong><span>{{ game.current_bet }}</span>
+                <div class="status-box status-bet">
+                    <span class="status-icon bet-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64" role="img" aria-hidden="true">
+                            <rect x="16" y="18" width="32" height="28" rx="4"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="3"/>
+                            <path d="M16 25h32"
+                                stroke="currentColor"
+                                stroke-width="2"/>
+                            <path d="M16 39h32"
+                                stroke="currentColor"
+                                stroke-width="2"/>
+                            <circle cx="25" cy="32" r="5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"/>
+                            <path d="M34 30h9M34 35h7"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"/>
+                            <path d="M21 14h22"
+                                stroke="currentColor"
+                                stroke-width="3"
+                                stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <strong>Bet</strong>
+                    <span>{{ game.current_bet }}</span>
                 </div>
 
                 {% if game.current_actor %}
@@ -122,7 +624,7 @@ HTML = """
             <div class="players-heading"><span>SEATS AT THE TABLE</span><span class="players-count">{{ game.players|length }} PLAYERS</span></div>
             <div class="player-list">
                 {% for p in game.players.values() %}
-                    <div class="player-seat {% if p.seat == game.current_actor %}actor{% endif %}">
+                    <div class="player-seat{% if p.seat in winner_seats %} winner{% endif %}{% if p.seat == game.current_actor %} active-turn{% endif %}">
                         <span class="seat-no">{{ p.seat }}</span>
                         <div><div class="player-name">{{ p.name }}</div><div class="player-meta">{{ game.role(p.seat) }} · Street {{ p.street_contribution }} / Total {{ p.total_contribution }}</div></div>
                         <div class="stack-value">{{ p.stack }}<span class="stack-label">stack</span></div>
@@ -298,12 +800,13 @@ def home():
         HTML,
         game=game,
         error=error_message,
+        winner_seats=winner_seats,
     )
 
 
 @app.route("/start", methods=["POST"])
 def start():
-    global game, error_message
+    global game, winner_seats, error_message
 
     try:
         small_blind = int(request.form["small_blind"])
@@ -397,7 +900,7 @@ def redo():
 
 @app.route("/settle", methods=["POST"])
 def settle():
-    global game, error_message
+    global game, winner_seats, error_message
 
     if game is not None:
         try:
@@ -410,6 +913,7 @@ def settle():
             history.push(game.snapshot())
 
             game.settle(winners_by_pot)
+            winner_seats = {seat for winners in winners_by_pot.values() for seat in winners}
 
             error_message = ""
 
@@ -420,10 +924,11 @@ def settle():
 
 @app.route("/new-hand", methods=["POST"])
 def new_hand():
-    global error_message
+    global winner_seats, error_message
 
     if game is not None:
         try:
+            winner_seats = set()
             game.start_hand()
             error_message = ""
         except PokerRuleError as exc:
