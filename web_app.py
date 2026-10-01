@@ -382,14 +382,41 @@ HTML = """
                 </form>
             </div>
 
-        {% elif game.hand_status == "AWAITING_SETTLEMENT" %}
+            {% elif game.hand_status == "AWAITING_SETTLEMENT" %}
 
-            <div class="card">
-                <h2>Hand Ready for Settlement</h2>
-                <p>The betting is complete.</p>
-            </div>
+                <div class="card">
+                    <h2>Hand Ready for Settlement</h2>
+                    <p>The betting is complete.</p>
 
-        {% elif game.hand_status == "COMPLETED" %}
+                    <form method="POST" action="{{ url_for('settle') }}">
+
+                        {% for pot in game.pots() %}
+                                {% set pot_index = loop.index0 %}
+
+                                <div class="card">
+                                <h3>{{ pot.label }} — {{ pot.amount }}</h3>
+
+                                <p>Select winner(s):</p>
+
+                                {% for seat in pot.eligible_seats %}
+                                    <label style="display:block; margin:8px 0;">
+                                        <input
+                                            type="checkbox"
+                                            name="winners_{{ pot_index }}"
+                                            value="{{ seat }}"
+                                        >
+                                        {{ game.player(seat).name }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        {% endfor %}
+
+                        <button type="submit" style="margin-top: 10px;">
+                            SETTLE HAND
+                        </button>
+
+                    </form>
+                </div>
 
             <div class="card">
                 <h2>Hand Completed</h2>
@@ -562,6 +589,29 @@ def redo():
             error_message = ""
         else:
             error_message = "Nothing to redo."
+
+    return redirect(url_for("home"))
+
+@app.route("/settle", methods=["POST"])
+def settle():
+    global game, error_message
+
+    if game is not None:
+        try:
+            winners_by_pot = {}
+
+            for idx, pot in enumerate(game.pots()):
+                winners = request.form.getlist(f"winners_{idx}")
+                winners_by_pot[idx] = [int(seat) for seat in winners]
+
+            history.push(game.snapshot())
+
+            game.settle(winners_by_pot)
+
+            error_message = ""
+
+        except (ValueError, PokerRuleError) as exc:
+            error_message = str(exc)
 
     return redirect(url_for("home"))
 
